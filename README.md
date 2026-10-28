@@ -82,6 +82,25 @@ trae dos shows escritos así, sin código:
 Los frames de varios caracteres que cambian a la vez (como las dos mitades
 de la cara) cambian en la misma vuelta, así el dibujo nunca queda partido.
 
+### Doom en vivo
+
+`doom_live.c` muestra la barra del Doom con el estado que manda el juego:
+munición, salud, armadura, llaves y la cara que elige el propio Doom
+(`st_faceindex`: nivel de dolor, mirando a los costados, ouch, sonrisa
+malvada, furia, modo dios y muerto; los dibujos están en `doom_faces.py`).
+Sólo reescribe lo que cambia y recarga únicamente los caracteres de la cara
+que cambiaron.
+
+```c
+doom_status_t s = { 47, 61, 100, DOOM_KEY_BLUE | DOOM_KEY_RED, 12 };
+doom_live_begin();                                  // una vez
+doom_live_update(&s);                               // cada vez que cambia algo
+doom_live_parse("ammo=46&face=13", &s);             // o desde texto
+```
+
+`tools/chocolate-doom` tiene un parche para Chocolate Doom que manda ese
+estado por UDP a BondiWeb mientras se juega.
+
 ### Driver
 
 `vfd_write()`, `vfd_puts_at()`, `vfd_goto()` y `vfd_clear()` encolan bytes
@@ -97,6 +116,9 @@ de la cara) cambian en la misma vuelta, así el dibujo nunca queda partido.
 | `src/screen.c`, `screen.h` | Líneas, desplazamientos, efectos, caracteres custom animados y shows |
 | `src/demo.c`, `demo.h` | La demo de Pac-Man, como show (sólo configuración) |
 | `src/doom.c`, `doom.h` | La barra de estado del Doom, como show |
+| `src/doom_live.c`, `doom_live.h` | La barra del Doom en vivo, con el estado del juego |
+| `src/doom_faces.h`, `doom_faces.py` | Las caras del Doomguy para el modo en vivo |
+| `tools/chocolate-doom/` | Parche para Chocolate Doom que manda la barra al display |
 | `src/vfd_hal.h` | Lo que cada plataforma tiene que implementar (6 funciones) |
 | `src/hal_arduino.cpp`, `BondiVFD.h` | HAL y header para Arduino |
 | `src/glyphs.h`, `glyphs.py` | Dibujos de Pac-Man y mapeo de puntos de la hoja de datos |
@@ -188,6 +210,7 @@ API (POST con `application/x-www-form-urlencoded`, respuestas JSON):
 | `POST /api/glyph` | `id` (0-9), `frames` (separados por coma, cada uno 7 filas de 2 dígitos hex; vacío = borrar), `ms` (cada cuánto cambia de frame) |
 | `POST /api/demo` | Carga la demo de Pac-Man |
 | `POST /api/doom` | Carga la barra de estado del Doom |
+| `POST /api/doom/live` | Barra del Doom en vivo: `ammo` (`-1` = sin munición), `health`, `armor`, `keys` (letras `b`, `y`, `r`), `face` (`st_faceindex` de Doom, 0-41). No se guarda en la flash; a los 10 s sin datos vuelve al show. El mismo texto (`ammo=47&health=61...`) se puede mandar por UDP al puerto 5050 |
 | `POST /api/wifi` | `ssid`, `pass`: guarda y reinicia |
 
 Por ejemplo:
@@ -200,6 +223,9 @@ curl -d "text2=Coloque monedas&scroll2=right&speed2=150" http://bondi.local/api/
 ```
 ```bash
 curl -d "id=0&ms=250&frames=0E1E1C181C1E0E,0E1F1F1F1F1F0E" http://bondi.local/api/glyph
+```
+```bash
+curl -d "ammo=47&health=61&armor=100&keys=br&face=13" http://bondi.local/api/doom/live
 ```
 
 ## Otra plataforma
@@ -228,6 +254,9 @@ make check
 - **Doom:** verifica que la línea de abajo quede fija, que los números
   pasen en orden, que la cara mire a los tres lados sin quedar partida y
   que use 9 ubicaciones.
+- **Doom en vivo:** pasa una serie de estados del juego, en el mismo texto
+  que manda el parche, y verifica los números, las llaves y que cada cara
+  cargada en el display sea la que corresponde.
 - **Pantallas:** corre `screen.c` con un reloj simulado y verifica
   alineación, acentos, marquesinas en los dos sentidos, pasadas, efectos,
   shows con varias páginas y que los frames iguales compartan ubicación.

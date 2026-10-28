@@ -1,0 +1,123 @@
+diff --git a/src/doom/st_stuff.c b/src/doom/st_stuff.c
+index da9b8bc..4120f71 100644
+--- a/src/doom/st_stuff.c
++++ b/src/doom/st_stuff.c
+@@ -21,12 +21,15 @@
+ 
+ 
+ #include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
+ #include <ctype.h>
+ 
+ #include "i_system.h"
+ #include "i_video.h"
+ #include "z_zone.h"
+ #include "m_misc.h"
++#include "m_argv.h"
+ #include "m_random.h"
+ #include "w_wad.h"
+ 
+@@ -59,6 +62,10 @@
+ #include "dstrings.h"
+ #include "sounds.h"
+ 
++#ifndef DISABLE_SDL2NET
++#include "SDL_net.h"
++#endif
++
+ //
+ // STATUS BAR DATA
+ //
+@@ -868,12 +875,91 @@ void ST_updateWidgets(void)
+ 
+ }
+ 
++//
++// BondiVFD: manda el estado de la barra a un display VFD de 2x20
++// (https://github.com/bondimachine/bondivfd, ejemplo BondiWeb) por UDP.
++// Se activa con -bondivfd host[:puerto], por ejemplo
++// -bondivfd bondi.local o -bondivfd 192.168.1.50:5050.
++//
++static void ST_BondiVFD(void)
++{
++#ifndef DISABLE_SDL2NET
++    static int ready = 0;           // 0: sin probar, 1: mandando, -1: apagado
++    static UDPsocket sock;
++    static UDPpacket *packet;
++    static char last[128];
++    static int quiet_tics;
++    char msg[128];
++    int ammo;
++
++    if (ready == 0)
++    {
++        int p = M_CheckParmWithArgs("-bondivfd", 1);
++        char host[256];
++        char *colon;
++        int port = 5050;
++        IPaddress addr;
++
++        ready = -1;
++        if (!p)
++            return;
++        M_StringCopy(host, myargv[p + 1], sizeof(host));
++        colon = strchr(host, ':');
++        if (colon != NULL)
++        {
++            *colon = '\0';
++            port = atoi(colon + 1);
++        }
++        if (SDLNet_Init() < 0 || SDLNet_ResolveHost(&addr, host, port) < 0)
++        {
++            printf("BondiVFD: no se pudo encontrar %s\n", host);
++            return;
++        }
++        sock = SDLNet_UDP_Open(0);
++        packet = SDLNet_AllocPacket(sizeof(msg));
++        if (sock == NULL || packet == NULL)
++        {
++            printf("BondiVFD: no se pudo abrir un socket UDP\n");
++            return;
++        }
++        packet->address = addr;
++        ready = 1;
++        printf("BondiVFD: mandando la barra de estado a %s:%d\n", host, port);
++    }
++    if (ready < 0)
++        return;
++
++    if (weaponinfo[plyr->readyweapon].ammo == am_noammo)
++        ammo = -1;
++    else
++        ammo = plyr->ammo[weaponinfo[plyr->readyweapon].ammo];
++
++    M_snprintf(msg, sizeof(msg), "ammo=%d&health=%d&armor=%d&keys=%s%s%s&face=%d",
++               ammo, plyr->health, plyr->armorpoints,
++               plyr->cards[it_bluecard] || plyr->cards[it_blueskull] ? "b" : "",
++               plyr->cards[it_yellowcard] || plyr->cards[it_yellowskull] ? "y" : "",
++               plyr->cards[it_redcard] || plyr->cards[it_redskull] ? "r" : "",
++               st_faceindex);
++
++    // Solo cuando algo cambia, y una vez por segundo para que el display
++    // sepa que el juego sigue (a los 10 s sin datos vuelve a su show).
++    if (!strcmp(msg, last) && ++quiet_tics < TICRATE)
++        return;
++    quiet_tics = 0;
++    M_StringCopy(last, msg, sizeof(last));
++    packet->len = strlen(msg);
++    memcpy(packet->data, msg, packet->len);
++    SDLNet_UDP_Send(sock, -1, packet);
++#endif
++}
++
+ void ST_Ticker (void)
+ {
+ 
+     st_randomnumber = M_Random();
+     ST_updateWidgets();
+     st_oldhealth = plyr->health;
++    ST_BondiVFD();
+ 
+ }
+ 

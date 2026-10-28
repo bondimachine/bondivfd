@@ -157,8 +157,11 @@ static uint8_t find_slot(const uint8_t *rows)
 }
 
 /* Reparte los frames de todos los caracteres entre las ubicaciones del
- * display. Devuelve 0 si no alcanzan. */
-static uint8_t allocate(void)
+ * display. Solo se recargan las ubicaciones que cambian de dibujo y las del
+ * caracter changed (su contenido puede haber cambiado en el mismo lugar);
+ * ALL_GLYPHS las recarga todas. Devuelve 0 si no alcanzan. */
+#define ALL_GLYPHS 0xFF
+static uint8_t allocate(uint8_t changed)
 {
     uint8_t i, f, s;
     slots_used = 0;
@@ -171,11 +174,17 @@ static uint8_t allocate(void)
             if (s == slots_used) {
                 if (slots_used == VFD_UDC_SLOTS)
                     return 0;
+                if (slot_rows[s] != rows)
+                    slots_pending |= (uint16_t)(1u << s);
                 slot_rows[slots_used++] = rows;
             }
+            if (i == changed)
+                slots_pending |= (uint16_t)(1u << s);
         }
     }
-    slots_pending = (uint16_t)((1u << slots_used) - 1);
+    if (changed == ALL_GLYPHS)
+        slots_pending = (uint16_t)((1u << slots_used) - 1);
+    slots_pending &= (uint16_t)((1u << slots_used) - 1);
     for (i = 0; i < SCREEN_GLYPHS; i++) {
         SCREEN_RAM glyph_t *g = &glyphs[i];
         if (g->n_frames)
@@ -433,10 +442,10 @@ uint8_t screen_play(const screen_show_t *s)
         if (d->id < SCREEN_GLYPHS)
             glyph_init(&glyphs[d->id], d->n_frames, d->frames, d->frame_ms);
     }
-    if (!allocate()) {
+    if (!allocate(ALL_GLYPHS)) {
         for (i = 0; i < SCREEN_GLYPHS; i++)
             glyphs[i].n_frames = 0;
-        allocate();
+        allocate(ALL_GLYPHS);
         show = 0;
         return 0;
     }
@@ -489,9 +498,9 @@ uint8_t screen_set_glyph(uint8_t id, uint8_t n_frames, const uint8_t *frames, ui
     old_n = glyphs[id].n_frames;
     old_ms = glyphs[id].frame_ms;
     glyph_init(&glyphs[id], n_frames, frames, frame_ms);
-    if (!allocate()) {
+    if (!allocate(id)) {
         glyph_init(&glyphs[id], old_n, old_frames, old_ms);
-        allocate();
+        allocate(id);
         return 0;
     }
     return 1;

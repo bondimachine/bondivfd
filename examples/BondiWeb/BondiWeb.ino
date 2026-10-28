@@ -32,6 +32,12 @@
  *                     der.; vacio = borrar), ms (cada cuanto cambia de frame)
  *   POST /api/demo    carga la demo de la libreria (Pac-Man)
  *   POST /api/doom    carga la barra de estado del Doom de la libreria
+ *   POST /api/doom/live  barra del Doom en vivo: ammo (-1 = sin municion),
+ *                     health, armor, keys (letras b/y/r), face (st_faceindex
+ *                     de Doom, 0-41). Lo mismo, como texto
+ *                     "ammo=47&health=61&...", por UDP al puerto 5050. No se
+ *                     guarda en la flash; a los 10 s sin datos vuelve al show.
+ *                     Ver tools/chocolate-doom en la libreria.
  *   POST /api/wifi    ssid, pass (guarda y reinicia)
  * En el texto, {0}..{9} son los caracteres custom y {{ es una llave.
  *
@@ -41,6 +47,7 @@
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <Preferences.h>
+#include <WiFiUdp.h>
 #include <BondiVFD.h>
 #include "index_html.h"
 
@@ -61,6 +68,8 @@
 #define SHOW_IP_MS   5000
 #define MAX_PAGES    12
 #define MAX_FRAMES   10         /* por caracter custom */
+#define LIVE_PORT    5050       /* UDP de la barra del Doom en vivo */
+#define LIVE_TIMEOUT_MS 10000   /* sin datos, vuelve al show */
 
 struct LineCfg {
   bool keep;                    /* igual que en la pantalla anterior */
@@ -98,6 +107,10 @@ static screen_show_t show;
 static uint32_t show_ip_until;
 static uint32_t restart_at;
 
+static WiFiUDP udp;
+static doom_status_t live = { 0, 100, 0, 0, 1 };
+static uint32_t live_until;     /* != 0 mientras se muestra el juego en vivo */
+
 static const char *ALIGN_NAMES[] = { "left", "center", "right" };
 static const char *SCROLL_NAMES[] = { "static", "left", "right", "pass-left", "pass-right" };
 static const char *EFFECT_NAMES[] = { "none", "type", "erase", "cycle" };
@@ -120,6 +133,7 @@ static bool play() {
     show_pages[p].ms = pages[p].ms;
   }
   show = { show_glyphs, n_g, show_pages, n_pages };
+  live_until = 0;               /* un cambio de configuracion corta el modo en vivo */
   if (show_ip_until)
     return true;                /* se reproduce cuando termina de mostrar la IP */
   return screen_play(&show);
@@ -266,7 +280,7 @@ static void handle_state() {
     j += "]}";
   }
   bool ap = WiFi.getMode() & WIFI_AP;
-  j += "],\"page\":" + String(screen_page());
+  j += "],\"page\":" + String(screen_page()) + ",\"live\":" + (live_until ? "true" : "false");
   j += ",\"slots\":{\"used\":" + String(screen_slots_used()) + ",\"total\":" + VFD_UDC_SLOTS + "}";
   j += ",\"wifi\":{\"mode\":\"" + String(ap ? "ap" : "sta") + "\",\"ssid\":" +
        json_str(ap ? String(AP_SSID) : WiFi.SSID()) + ",\"ip\":\"" +
@@ -454,6 +468,39 @@ static void handle_doom() {
   apply_and_reply();
 }
 
+/* Estado del juego en texto "ammo=47&health=61..." (HTTP o UDP) */
+static bool live_apply(const char *text) {
+  if (!doom_live_parse(text, &live))
+    return false;
+  if (!live_until)
+    doom_live_begin();
+  doom_live_update(&live);
+  live_until = millis() + LIVE_TIMEOUT_MS;
+  show_ip_until = 0;
+  return true;
+}
+
+static void handle_doom_live() {
+  String text;
+  for (const char *k : { "ammo", "health", "armor", "keys", "face" })
+    if (server.hasArg(k))
+      text += String(k) + "=" + server.arg(k) + "&";
+  if (!live_apply(text.c_str()))
+    return send_error(400, "falta alguno de ammo, health, armor, keys o face");
+  send_json(200, "{\"ok\":true,\"live\":true}");
+}
+
+static void poll_udp() {
+  char buf[128];
+  if (!udp.parsePacket())
+    return;
+  int n = udp.read(buf, sizeof buf - 1);
+  if (n > 0) {
+    buf[n] = 0;
+    live_apply(buf);
+  }
+}
+
 static void handle_wifi() {
   if (!server.hasArg("ssid") || server.arg("ssid").isEmpty())
     return send_error(400, "falta ssid");
@@ -542,18 +589,25 @@ void setup() {
   server.on("/api/glyph", HTTP_POST, handle_glyph);
   server.on("/api/demo", HTTP_POST, handle_demo);
   server.on("/api/doom", HTTP_POST, handle_doom);
+  server.on("/api/doom/live", HTTP_POST, handle_doom_live);
   server.on("/api/wifi", HTTP_POST, handle_wifi);
   server.onNotFound(handle_not_found);
   server.begin();
+  udp.begin(LIVE_PORT);
 }
 
 void loop() {
   server.handleClient();
+  poll_udp();
   poll_display();
   if (show_ip_until && (int32_t)(millis() - show_ip_until) >= 0) {
     show_ip_until = 0;
     if (!screen_play(&show))
       show_text("Caracteres custom", "no entran");
+  }
+  if (live_until && (int32_t)(millis() - live_until) >= 0) {
+    live_until = 0;               /* el juego dejo de mandar: vuelve al show */
+    screen_play(&show);
   }
   if (restart_at && (int32_t)(millis() - restart_at) >= 0)
     ESP.restart();

@@ -21,6 +21,7 @@
 #include "screen.h"
 #include "demo.h"
 #include "doom.h"
+#include "doom_live.h"
 
 #ifdef __cplusplus
 extern "C" {
