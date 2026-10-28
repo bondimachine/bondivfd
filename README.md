@@ -70,8 +70,17 @@ frames pero sólo 9 ubicaciones.
 Un show (`screen_show_t`) es la lista de caracteres custom más una secuencia
 de páginas que se repite. Cada página tiene sus dos líneas y una duración en
 ms; con 0 dura hasta que terminan sus pasadas y efectos de una sola vez. Una
-línea con texto `NULL` queda como estaba en la página anterior. `src/demo.c`
-es un show completo escrito así, sin código.
+línea con texto `NULL` queda como estaba en la página anterior. La librería
+trae dos shows escritos así, sin código:
+
+- **`demo_show`** (`src/demo.c`): un título que se tipea y el intermedio de
+  Pac-Man, con los fantasmas persiguiéndolo y después al revés.
+- **`doom_show`** (`src/doom.c`): la barra de estado del Doom, con munición,
+  salud, armadura, llaves y la cara del Doomguy (2×2 caracteres) mirando a
+  los costados mientras dispara, recibe golpes y levanta armadura.
+
+Los frames de varios caracteres que cambian a la vez (como las dos mitades
+de la cara) cambian en la misma vuelta, así el dibujo nunca queda partido.
 
 ### Driver
 
@@ -86,7 +95,8 @@ es un show completo escrito así, sin código.
 | `src/vfd.c`, `vfd.h` | Driver del display: reset, comandos, cola de bytes |
 | `src/vfd_char.c` | Carga de caracteres custom |
 | `src/screen.c`, `screen.h` | Líneas, desplazamientos, efectos, caracteres custom animados y shows |
-| `src/demo.c`, `demo.h` | La demo, como show (sólo configuración) |
+| `src/demo.c`, `demo.h` | La demo de Pac-Man, como show (sólo configuración) |
+| `src/doom.c`, `doom.h` | La barra de estado del Doom, como show |
 | `src/vfd_hal.h` | Lo que cada plataforma tiene que implementar (6 funciones) |
 | `src/hal_arduino.cpp`, `BondiVFD.h` | HAL y header para Arduino |
 | `src/glyphs.h`, `glyphs.py` | Dibujos de Pac-Man y mapeo de puntos de la hoja de datos |
@@ -151,8 +161,9 @@ con el reset por software que manda `vfd_begin()`.
 navegador: una secuencia de pantallas, cada una con sus dos líneas
 (alineación, marquesina o pasada en cualquier dirección, efectos de tipear y
 borrar) y su duración, más un editor de caracteres custom con varios frames
-y una galería de animaciones. La primera vez arranca con la demo, que se
-puede volver a cargar desde la página. Todo se guarda en la flash.
+y una galería de animaciones. La primera vez arranca con la demo; desde la
+página se pueden cargar la demo de Pac-Man o la barra del Doom. Todo se
+guarda en la flash.
 
 - **WiFi:** la primera vez, o si no logra conectarse, el ESP32 crea la red
   `BondiMachine` (clave `bondimachine`). Entrando a <http://192.168.4.1/> se
@@ -175,7 +186,8 @@ API (POST con `application/x-www-form-urlencoded`, respuestas JSON):
 | `POST /api/lines` | Cambia una pantalla: `page` (0.., o la cantidad para agregar una), `ms` (duración, 0 = hasta que terminen sus animaciones) y por línea `text1`, `align1` (`left`, `center`, `right`), `scroll1` (`static`, `left`, `right`, `pass-left`, `pass-right`), `speed1` (ms por paso), `effect1` (`none`, `type`, `erase`, `cycle`), `fxms1` (ms por letra), `cursor1` (`block`, `none` o `0`-`9`), `keep1` (`1` = igual que la pantalla anterior), y/o lo mismo con `2`. Sólo cambia lo que se manda |
 | `POST /api/pages` | Reemplaza toda la secuencia: `n` y, por cada pantalla `i`, los mismos campos con el prefijo `p<i>_` (`p0_ms`, `p0_text1`...) |
 | `POST /api/glyph` | `id` (0-9), `frames` (separados por coma, cada uno 7 filas de 2 dígitos hex; vacío = borrar), `ms` (cada cuánto cambia de frame) |
-| `POST /api/demo` | Carga la demo |
+| `POST /api/demo` | Carga la demo de Pac-Man |
+| `POST /api/doom` | Carga la barra de estado del Doom |
 | `POST /api/wifi` | `ssid`, `pass`: guarda y reinicia |
 
 Por ejemplo:
@@ -213,6 +225,9 @@ make check
   Pac-Man perseguido hacia la izquierda, los fantasmas asustados hacia la
   derecha y la pantalla final, reconociendo a los personajes por el dibujo
   cargado en el display.
+- **Doom:** verifica que la línea de abajo quede fija, que los números
+  pasen en orden, que la cara mire a los tres lados sin quedar partida y
+  que use 9 ubicaciones.
 - **Pantallas:** corre `screen.c` con un reloj simulado y verifica
   alineación, acentos, marquesinas en los dos sentidos, pasadas, efectos,
   shows con varias páginas y que los frames iguales compartan ubicación.

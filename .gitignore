@@ -3,4 +3,5 @@ __pycache__/
 ports/host/vfd_host
 ports/host/screen_test
 ports/host/stream.txt
+ports/host/doom.txt
 examples/BondiWeb/wifi_config.h

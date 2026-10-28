@@ -20,6 +20,7 @@
 #include "vfd.h"
 #include "screen.h"
 #include "demo.h"
+#include "doom.h"
 
 #ifdef __cplusplus
 extern "C" {

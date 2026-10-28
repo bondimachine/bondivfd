@@ -515,8 +515,9 @@ void screen_poll(void)
             l->dirty = 1;
         }
     }
-    /* Un cambio de frame por llamada: si coinciden varios, los demas van en
-     * las proximas (asi ninguna llamada tarda mucho, incluso en un 8051) */
+    /* Todos los cambios de frame que vencen juntos van en la misma llamada:
+     * asi un dibujo de varios caracteres (como la cara de doom.c) cambia
+     * entero, sin mitades desparejas */
     for (i = 0; i < SCREEN_GLYPHS; i++) {
         SCREEN_RAM glyph_t *g = &glyphs[i];
         if (g->n_frames > 1 && (uint16_t)(now - g->t_step) >= g->frame_ms) {
@@ -528,7 +529,6 @@ void screen_poll(void)
                 for (j = 0; j < SCREEN_LINES; j++)
                     if (line_has_glyph(&lines[j], i))
                         lines[j].dirty = 1;
-            break;
         }
     }
     if (show && show->n_pages > 1 && page_done(now)) {

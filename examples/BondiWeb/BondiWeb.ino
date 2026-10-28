@@ -30,7 +30,8 @@
  *   POST /api/glyph   id (0-9), frames (frames separados por coma, cada uno 7
  *                     filas de 2 digitos hex, bits 4..0 = columnas de izq. a
  *                     der.; vacio = borrar), ms (cada cuanto cambia de frame)
- *   POST /api/demo    carga la demo de la libreria
+ *   POST /api/demo    carga la demo de la libreria (Pac-Man)
+ *   POST /api/doom    carga la barra de estado del Doom de la libreria
  *   POST /api/wifi    ssid, pass (guarda y reinicia)
  * En el texto, {0}..{9} son los caracteres custom y {{ es una llave.
  *
@@ -447,6 +448,12 @@ static void handle_demo() {
   apply_and_reply();
 }
 
+static void handle_doom() {
+  load_show(&doom_show);
+  show_ip_until = 0;
+  apply_and_reply();
+}
+
 static void handle_wifi() {
   if (!server.hasArg("ssid") || server.arg("ssid").isEmpty())
     return send_error(400, "falta ssid");
@@ -534,6 +541,7 @@ void setup() {
   server.on("/api/pages", HTTP_POST, handle_pages);
   server.on("/api/glyph", HTTP_POST, handle_glyph);
   server.on("/api/demo", HTTP_POST, handle_demo);
+  server.on("/api/doom", HTTP_POST, handle_doom);
   server.on("/api/wifi", HTTP_POST, handle_wifi);
   server.onNotFound(handle_not_found);
   server.begin();

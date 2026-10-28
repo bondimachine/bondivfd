@@ -3,9 +3,10 @@
 recibiria el display (comandos, caracteres custom, tiempos de ejecucion) y
 guarda lo que se ve. Tambien verifica la historia de la demo de Pac-Man.
 
-Uso como programa: python3 vfd_model.py stream.txt
+Uso como programa: python3 vfd_model.py [--doom] stream.txt
   stream.txt: salida de ports/host/vfd_host ("ms byte" por linea). Verifica
-  que la demo (src/demo.c) cuente bien su historia.
+  que la demo (src/demo.c) cuente bien su historia, o con --doom la barra
+  del Doom (src/doom.c).
 """
 import os
 import sys
@@ -168,7 +169,40 @@ DEMO_TOP = "      BondiVFD      "
 DEMO_FINAL = ("  IEE 03601-95B-40  ", "      VFD 2x20      ")
 
 
+DOOM_LABELS = "AMMO HLTH ?? ARMR   "
+DOOM_STORY = [(50, 100, 0), (49, 100, 0), (48, 100, 0), (47, 100, 0), (47, 83, 0),
+              (47, 61, 0), (47, 61, 100), (46, 61, 100), (45, 61, 100), (44, 61, 100)]
+
+
+def check_doom(vfd):
+    """Barra del Doom: la linea de abajo queda fija, los numeros pasan en
+    orden, la cara (2x2 caracteres) mira a tres lados y hay 9 ubicaciones."""
+    import re
+    seen, looks = [], set()
+    for _, ch in vfd.snapshots[1:]:
+        top, bottom = render_text(ch[:20]), render_text(ch[20:])
+        if not bottom.strip():
+            continue                          # todavia no se dibujo
+        assert bottom == DOOM_LABELS, repr(bottom)
+        m = re.fullmatch(r" *(\d+) +(\d+)% \?\? +(\d+)% \?\?", top)
+        if not m:
+            continue                          # la linea de arriba todavia no se dibujo
+        values = tuple(int(g) for g in m.groups())
+        if not seen or seen[-1] != values:
+            seen.append(values)
+        looks.add((tuple(vfd.udc[ch[10]]), tuple(vfd.udc[ch[11]])))
+        assert ch[18] == ch[19], "las dos llaves tienen que ser iguales"
+    assert seen[:len(DOOM_STORY) + 1] == DOOM_STORY + DOOM_STORY[:1], seen
+    assert len(looks) == 3, f"la cara tiene que mirar a 3 lados, miro a {len(looks)}"
+    used = {c for _, ch in vfd.snapshots[1:] for c in ch if c >= 0xF6}
+    assert len(used) == 9, sorted(hex(c) for c in used)
+    print(f"OK doom: {vfd.writes} bytes al VFD, {len(seen)} cambios de numeros, la cara mira a 3 lados, "
+          f"{len(used)} ubicaciones")
+
+
 def main():
+    if sys.argv[1] == "--doom":
+        return check_doom(replay(sys.argv[2]))
     vfd = replay(sys.argv[1])
     phases = check_story(vfd.snapshots[1:], vfd.udc, DEMO_TOP, DEMO_FINAL)
     assert phases[:6] == ["huida", "persecucion", "final"] * 2, phases

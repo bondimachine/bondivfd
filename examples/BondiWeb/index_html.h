@@ -95,6 +95,7 @@ details summary { cursor: pointer; color: var(--muted); }
 <div class="row" style="margin-top:10px">
 <button class="primary" id="sendAll">Enviar la secuencia</button>
 <button id="loadDemo">Cargar demo</button>
+<button id="loadDoom">Cargar Doom</button>
 <span class="muted">{0}…{9} insertan caracteres custom, {{ escribe una llave.</span>
 </div>
 </section>
@@ -594,10 +595,12 @@ $("#esp").placeholder = servedByEsp ? location.host + " (este ESP32)" : "IP del 
 $("#esp").addEventListener("change", () => { store("bondi.esp", $("#esp").value.trim()); refresh(); });
 $("#reload").addEventListener("click", refresh);
 $("#sendAll").addEventListener("click", sendAll);
-$("#loadDemo").addEventListener("click", async () => {
-const j = await run("Demo cargada", () => api("/api/demo", {}));
-if (j) { applyState(j); selectGlyph(edit.id); }
-});
+const loadShow = (name, label) => async () => {
+const j = await run(label + " cargado", () => api("/api/" + name, {}));
+if (j) { cur = 0; applyState(j); selectGlyph(edit.id); }
+};
+$("#loadDemo").addEventListener("click", loadShow("demo", "Demo de Pac-Man"));
+$("#loadDoom").addEventListener("click", loadShow("doom", "Doom"));
 $("#pageMs").addEventListener("input", (e) => { pages[cur].ms = Math.max(0, +e.target.value || 0); resetAnim(); });
 $("#pageAdd").addEventListener("click", () => { pages.splice(cur + 1, 0, mkPage()); cur++; renderPages(); });
 $("#pageDup").addEventListener("click", () => { pages.splice(cur + 1, 0, clone(pages[cur])); cur++; renderPages(); });
