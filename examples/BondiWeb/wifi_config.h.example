@@ -1,0 +1,4 @@
+/* Red WiFi por defecto. Copiar como wifi_config.h (no se sube a git).
+ * La red cargada desde la pagina tiene prioridad sobre esta. */
+#define WIFI_SSID "MiRed"
+#define WIFI_PASS "MiClave"

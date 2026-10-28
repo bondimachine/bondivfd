@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+ports/host/vfd_host
+ports/host/screen_test
+ports/host/stream.txt
+examples/BondiWeb/wifi_config.h
